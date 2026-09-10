@@ -1,5 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
-import { getAllProductsService } from "./product.service.js";
+import {
+  getAllProductsService,
+  getProductBySlugService,
+} from "./product.service.js";
 
 export const getAllProductsController = async (
   _req: Request,
@@ -17,7 +20,29 @@ export const getAllProductsController = async (
   }
 };
 
-export const getProductBySlugController = async () => {};
+export const getProductBySlugController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { param } = req.params;
+
+    if (!param || Array.isArray(param)) {
+      return res.sendStatus(400);
+    }
+
+    const slug = param.trim();
+
+    const product = await getProductBySlugService(slug);
+
+    res.status(200).json({
+      data: { product },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const getRecommendedProductsController = async () => {};
 
