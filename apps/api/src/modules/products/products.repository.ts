@@ -33,4 +33,23 @@ export class ProductRepository {
 
     return rows[0];
   }
+
+  getRandom = async () => {
+    const [rows] = await pool.execute(`
+    SELECT *
+    FROM products
+    ORDER BY RAND()
+    LIMIT 10
+  `);
+
+    return rows;
+  };
+
+  getDeals = async () => {
+    const [rows] = await pool.execute(
+      `SELECT * FROM products WHERE discount > 30 ORDER BY RAND() LIMIT 10`,
+    );
+
+    return rows;
+  };
 }

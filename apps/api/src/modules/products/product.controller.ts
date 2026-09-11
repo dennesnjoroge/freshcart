@@ -2,6 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import {
   getAllProductsService,
   getProductBySlugService,
+  getRecommendedProductsService,
+  getDealsService,
 } from "./product.service.js";
 
 export const getAllProductsController = async (
@@ -44,8 +46,36 @@ export const getProductBySlugController = async (
   }
 };
 
-export const getRecommendedProductsController = async () => {};
+export const getRecommendedProductsController = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const products = await getRecommendedProductsService();
 
-export const getProductDealsController = async () => {};
+    res.status(200).json({
+      data: { products },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProductDealsController = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const products = await getDealsService();
+
+    res.status(200).json({
+      data: { products },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const getProductsByCategoryController = async () => {};

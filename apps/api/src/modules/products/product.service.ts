@@ -14,3 +14,11 @@ export const getProductBySlugService = async (slug: string) => {
 
   return product;
 };
+
+export const getRecommendedProductsService = async () => {
+  const products = await productRepository.getRandom();
+
+  return products;
+};
+
+export const getDealsService = () => productRepository.getDeals();
