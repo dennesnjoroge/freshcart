@@ -17,15 +17,8 @@ export const getRecommendedProductsService = async () => {
 export const getDealsService = () => productRepository.getDeals();
 
 // get by category
-export const getProductsByCategoryService = async (category: string) => {
-  const products = await productRepository.getByCategory(category);
-
-  if (products.length === 0) {
-    throw new Error(`No products found in category: ${category}`);
-  }
-
-  return products;
-};
+export const getProductsByCategoryService = async (category: string) =>
+  await productRepository.getByCategory(category);
 
 // get by slug
 export const getProductBySlugService = async (slug: string) => {
