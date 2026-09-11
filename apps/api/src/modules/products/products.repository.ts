@@ -20,7 +20,7 @@ export interface Product extends RowDataPacket {
 export class ProductRepository {
   async getAll(): Promise<Product[]> {
     const [rows] = await pool.query<Product[]>(
-      ` SELECT id, name, description, category, price, discount, stock, sku, slug, image, extras, created_at, updated_at FROM products ORDER BY created_at DESC `,
+      `SELECT id, name, description, category, price, discount, stock, sku, slug, image, extras, created_at, updated_at FROM products ORDER BY created_at DESC`,
     );
     return rows;
   }
@@ -34,7 +34,7 @@ export class ProductRepository {
     return rows[0];
   }
 
-  getRandom = async () => {
+  async getRandom() {
     const [rows] = await pool.execute(`
     SELECT *
     FROM products
@@ -43,7 +43,7 @@ export class ProductRepository {
   `);
 
     return rows;
-  };
+  }
 
   getDeals = async () => {
     const [rows] = await pool.execute(
@@ -52,4 +52,12 @@ export class ProductRepository {
 
     return rows;
   };
+
+  async getByCategory(category: string): Promise<Product[]> {
+    const [rows] = await pool.query<Product[]>(
+      `SELECT id, name, description, category, price, discount, stock, sku, slug, image, extras, created_at, updated_at FROM products WHERE category = ? ORDER BY created_at DESC`,
+      [category],
+    );
+    return rows;
+  }
 }
