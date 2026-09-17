@@ -1,4 +1,8 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
+import type {
+  ResultSetHeader,
+  RowDataPacket,
+  PoolConnection,
+} from "mysql2/promise";
 import { pool } from "../../config/db.js";
 
 export interface User extends RowDataPacket {
@@ -29,7 +33,7 @@ export interface CreateUserParams {
 export interface EmailVerificationToken extends RowDataPacket {
   id: number;
   public_id: string;
-  user_id: number;
+  user_id: bigint;
   token_hash: string;
   expires_at: Date;
   used_at: Date | null;
@@ -38,7 +42,7 @@ export interface EmailVerificationToken extends RowDataPacket {
 
 export interface CreateVerificationTokenParams {
   public_id: string;
-  user_id: number;
+  user_id: bigint;
   token_hash: string;
   expires_at: Date;
 }
@@ -90,7 +94,10 @@ export class AuthRepository {
     return rows[0] ?? null;
   }
 
-  async createUser(params: CreateUserParams): Promise<User> {
+  async createUser(
+    params: CreateUserParams,
+    connection: PoolConnection,
+  ): Promise<User> {
     const {
       public_id,
       first_name,
@@ -101,7 +108,7 @@ export class AuthRepository {
       status = "PENDING_VERIFICATION",
     } = params;
 
-    const [result] = await pool.execute<ResultSetHeader>(
+    const [result] = await connection.execute<ResultSetHeader>(
       `
         INSERT INTO users (
           public_id,
@@ -144,10 +151,11 @@ export class AuthRepository {
 
   createVerificationToken = async (
     params: CreateVerificationTokenParams,
+    connection: PoolConnection,
   ): Promise<EmailVerificationToken> => {
     const { public_id, user_id, token_hash, expires_at } = params;
 
-    const [result] = await pool.execute<ResultSetHeader>(
+    const [result] = await connection.execute<ResultSetHeader>(
       `
         INSERT INTO email_verification_tokens (
           public_id,
