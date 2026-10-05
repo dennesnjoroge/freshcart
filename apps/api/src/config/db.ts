@@ -1,13 +1,6 @@
 // mysql config
 import mysql from "mysql2/promise";
-
-const getEnvVar = (value: string): string => {
-  const envVar = process.env[value];
-  if (!envVar) {
-    throw new Error(`Missing required environment variable: ${value}`);
-  }
-  return envVar;
-};
+import { getEnvVar } from "./env.js";
 
 export const pool = mysql.createPool({
   host: getEnvVar("DB_HOST"),
