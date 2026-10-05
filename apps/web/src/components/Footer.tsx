@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import {
-  MapPin,
-  Phone,
-  Mail,
-  Clock,
-  CopyrightIcon,
-  ShieldCheck,
-} from "lucide-react";
+import { MapPin, Phone, Mail, Clock, CopyrightIcon } from "lucide-react";
 
 export const Footer = () => {
   const [emailAddress, setEmailAddress] = useState("");
@@ -152,8 +145,7 @@ export const Footer = () => {
           </div>
 
           <div className="flex items-center justify-center gap-1">
-            <ShieldCheck className="h-4 w-4" strokeWidth={1.5} />
-            <span>Quality Guaranteed</span>
+            Developed by: <a href="#">Dmn</a>
           </div>
         </div>
       </div>

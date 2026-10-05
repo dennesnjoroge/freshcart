@@ -1,4 +1,4 @@
-//import { Header } from "../components/header/Header";
+import { Header } from "../components/header/Header";
 import { HeroImage } from "../components/HeroImage";
 import { Link } from "react-router";
 import { useEffect, useState } from "react";
@@ -18,6 +18,8 @@ interface Product {
 
 export const Home = () => {
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
+  const [deals, setDeals] = useState<Product[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,6 +43,27 @@ export const Home = () => {
     fetchRecommendedProducts();
   }, []);
 
+  useEffect(() => {
+    const fetchDeals = async () => {
+      try {
+        const response = await apiClient.get("/v1/products/promotions/deals");
+        setDeals(
+          response.data.data.products.map((product: Product) => ({
+            ...product,
+            price: Number(product.price),
+            discount: Number(product.discount),
+          })),
+        );
+      } catch (error) {
+        console.error("Failed to fetch products:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDeals();
+  }, []);
+
   if (loading) {
     return "Loading...";
   }
@@ -51,6 +74,8 @@ export const Home = () => {
 
   return (
     <div className="min-h-screen">
+      <Header />
+
       <div className="mx-auto px-4 sm:px-6 lg:px-8">
         <HeroImage />
       </div>
@@ -75,6 +100,20 @@ export const Home = () => {
                 key={recommendedProduct.id}
                 product={recommendedProduct}
               />
+            ))}
+          </div>
+        </div>
+
+        <div className="my-8 sm:my-10">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+              Deals
+            </h2>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {deals.map((deal) => (
+              <ProductCard key={deal.id} product={deal} />
             ))}
           </div>
         </div>

@@ -1,21 +1,22 @@
 import { Link } from "react-router";
 //import { AddToCartBtn } from "../AddToCartBtn";
 import { STATIC_ASSETS_URL } from "../config/url";
-//import { useState } from "react";
-//import { QuantitySelector } from "../QuantitySelector";
+import { useState } from "react";
+import { QuantitySelector } from "./QuantitySelector";
+import { AddToCartBtn } from "./AddToCartBtn";
 
 interface Product {
   id: string | number;
   slug: string;
   image: string;
   name: string;
-  stock: boolean;
+  stock: number;
   price: number;
   discount: number;
 }
 
 export const ProductCard = ({ product }: { product: Product }) => {
-  //const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(1);
 
   return (
     <div
@@ -77,15 +78,13 @@ export const ProductCard = ({ product }: { product: Product }) => {
         </div>
       </Link>
 
-      {/**
-       *  <QuantitySelector
+      <QuantitySelector
         product={product}
         quantity={quantity}
         setQuantity={setQuantity}
       />
 
       <AddToCartBtn product={product} quantity={quantity} />
-       */}
     </div>
   );
 };
