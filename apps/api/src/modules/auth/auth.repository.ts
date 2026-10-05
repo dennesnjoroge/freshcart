@@ -1,82 +1,39 @@
+import type { ResultSetHeader, Pool, PoolConnection } from "mysql2/promise";
 import type {
-  ResultSetHeader,
-  RowDataPacket,
-  PoolConnection,
-} from "mysql2/promise";
+  User,
+  CreateUserParams,
+  CreateRefreshTokenParams,
+  CreatePasswordResetTokenParams,
+  PasswordResetToken,
+  CreateVerificationTokenParams,
+  VerificationToken,
+  UpdatePasswordParams,
+  RefreshToken,
+} from "./auth.types.js";
 import { pool } from "../../config/db.js";
 
-export interface User extends RowDataPacket {
-  id: bigint;
-  public_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string | null;
-  password_hash: string;
-  email_verified_at: Date | null;
-  phone_verified_at: Date | null;
-  status: "PENDING_VERIFICATION" | "ACTIVE" | "SUSPENDED" | "DISABLED";
-  created_at: Date;
-  updated_at: Date;
-}
+const USER_COLUMNS = `id, public_id, first_name, last_name, email, password_hash, status, email_verified_at, created_at, updated_at`;
 
-export interface CreateUserParams {
-  public_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone?: string | null;
-  password_hash: string;
-  status?: User["status"];
-}
+class AuthRepository {
+  async getUserById(userId: string): Promise<User | null> {
+    const [rows] = await pool.execute<User[]>(
+      `SELECT ${USER_COLUMNS} FROM users WHERE id = ? LIMIT 1`,
+      [userId],
+    );
 
-export interface EmailVerificationToken extends RowDataPacket {
-  id: number;
-  public_id: string;
-  user_id: bigint;
-  token_hash: string;
-  expires_at: Date;
-  used_at: Date | null;
-  created_at: Date;
-}
+    return rows[0] ?? null;
+  }
 
-export interface CreateVerificationTokenParams {
-  public_id: string;
-  user_id: bigint;
-  token_hash: string;
-  expires_at: Date;
-}
+  async getUserByPublicId(publicId: string): Promise<User | null> {
+    const [rows] = await pool.execute<User[]>(
+      `SELECT ${USER_COLUMNS} FROM users WHERE public_id = ? LIMIT 1`,
+      [publicId],
+    );
 
-const USER_COLUMNS = `
-  id,
-  public_id,
-  first_name,
-  last_name,
-  email,
-  phone,
-  password_hash,
-  email_verified_at,
-  phone_verified_at,
-  status,
-  created_at,
-  updated_at
-`;
+    return rows[0] ?? null;
+  }
 
-const VERIFICATION_TOKEN_COLUMNS = `
-  id,
-  public_id,
-  user_id,
-  token_hash,
-  expires_at,
-  used_at,
-  created_at
-`;
-
-export class AuthRepository {
-  // -------------------------
-  // Users
-  // -------------------------
-  async getByEmail(email: string): Promise<User | null> {
+  async getUserByemail(email: string): Promise<User | null> {
     const [rows] = await pool.execute<User[]>(
       `SELECT ${USER_COLUMNS} FROM users WHERE email = ? LIMIT 1`,
       [email],
@@ -85,161 +42,225 @@ export class AuthRepository {
     return rows[0] ?? null;
   }
 
-  async getByPhone(phone: string): Promise<User | null> {
-    const [rows] = await pool.execute<User[]>(
-      `SELECT ${USER_COLUMNS} FROM users WHERE phone = ? LIMIT 1`,
-      [phone],
-    );
-
-    return rows[0] ?? null;
-  }
-
   async createUser(
     params: CreateUserParams,
-    connection: PoolConnection,
+    connection: PoolConnection | Pool = pool,
   ): Promise<User> {
-    const {
-      public_id,
-      first_name,
-      last_name,
-      email,
-      phone = null,
-      password_hash,
-      status = "PENDING_VERIFICATION",
-    } = params;
+    const { publicId, firstName, lastName, email, passwordHash } = params;
 
     const [result] = await connection.execute<ResultSetHeader>(
       `
-        INSERT INTO users (
-          public_id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          password_hash,
-          status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      [public_id, first_name, last_name, email, phone, password_hash, status],
+      INSERT INTO users (
+        public_id,
+        first_name,
+        last_name,
+        email,
+        password_hash
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `,
+      [publicId, firstName, lastName, email, passwordHash],
     );
 
-    const user = await this.getById(result.insertId);
+    const [rows] = await connection.execute<User[]>(
+      `
+      SELECT
+        id,
+        public_id,
+        first_name,
+        last_name,
+        email,
+        password_hash
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `,
+      [result.insertId],
+    );
+
+    const user = rows[0];
 
     if (!user) {
-      throw new Error("Failed to retrieve created user");
+      throw new Error("Failed to retrieve created user.");
     }
 
     return user;
   }
 
-  async getById(id: number): Promise<User | null> {
-    const [rows] = await pool.execute<User[]>(
-      `SELECT ${USER_COLUMNS}
-       FROM users
-       WHERE id = ?
-       LIMIT 1`,
-      [id],
+  async markUserAsActive(
+    userId: string,
+    connection: PoolConnection,
+  ): Promise<void> {
+    await connection.execute(
+      `UPDATE users
+     SET status = 'ACTIVE',
+         email_verified_at = NOW()
+     WHERE id = ?
+       AND status = 'PENDING_VERIFICATION'
+       AND email_verified_at IS NULL`,
+      [userId],
+    );
+  }
+
+  async updatePassword(
+    params: UpdatePasswordParams,
+    connection: PoolConnection,
+  ) {
+    const { userId, passwordHash } = params;
+
+    await connection.execute(
+      `UPDATE users SET password_hash = ? WHERE id = ?`,
+      [passwordHash, userId],
+    );
+  }
+
+  async createRefreshToken(
+    params: CreateRefreshTokenParams,
+    connection: PoolConnection | Pool = pool,
+  ): Promise<void> {
+    const { user_id, token_hash, expires_at, user_agent, ip_address } = params;
+
+    await connection.execute(
+      `
+      INSERT INTO refresh_tokens (
+        user_id,
+        token_hash,
+        expires_at,
+        user_agent,
+        ip_address
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `,
+      [user_id, token_hash, expires_at, user_agent ?? null, ip_address ?? null],
+    );
+
+    /*const [rows] = await connection.execute<RowDataPacket[]>(
+      `
+      SELECT
+        id,
+        user_id,
+        token_hash,
+        expires_at,
+        created_at,
+        last_used_at,
+        revoked_at,
+        user_agent,
+        ip_address
+      FROM refresh_tokens
+      WHERE id = ?
+      LIMIT 1
+    `,
+      [result.insertId],
+    );
+    */
+  }
+
+  async getRefreshTokenByHash(tokenHash: string): Promise<RefreshToken | null> {
+    const [rows] = await pool.execute<RefreshToken[]>(
+      `SELECT id, user_id, token_hash, expires_at, created_at, last_used_at, revoked_at, user_agent, ip_address FROM refresh_tokens WHERE token_hash = ?`,
+      [tokenHash],
     );
 
     return rows[0] ?? null;
   }
 
-  // -------------------------
-  // Email verification
-  // -------------------------
-
-  createVerificationToken = async (
-    params: CreateVerificationTokenParams,
-    connection: PoolConnection,
-  ): Promise<EmailVerificationToken> => {
-    const { public_id, user_id, token_hash, expires_at } = params;
-
-    const [result] = await connection.execute<ResultSetHeader>(
-      `
-        INSERT INTO email_verification_tokens (
-          public_id,
-          user_id,
-          token_hash,
-          expires_at
-        )
-        VALUES (?, ?, ?, ?)
-      `,
-      [public_id, user_id, token_hash, expires_at],
+  revokeRefreshToken = async (
+    refreshTokenHash: string,
+    connection: Pool | PoolConnection = pool,
+  ): Promise<void> => {
+    await connection.execute(
+      `UPDATE refresh_tokens
+   SET revoked_at = ?
+   WHERE token_hash = ?
+     AND revoked_at IS NULL`,
+      [new Date(), refreshTokenHash],
     );
-
-    const token = await this.getVerificationTokenById(result.insertId);
-
-    if (!token) {
-      throw new Error("Failed to retrieve created verification token");
-    }
-
-    return token;
   };
 
-  getVerificationTokenById = async (
-    id: number,
-  ): Promise<EmailVerificationToken | null> => {
-    const [rows] = await pool.execute<EmailVerificationToken[]>(
-      `
-          SELECT ${VERIFICATION_TOKEN_COLUMNS}
-          FROM email_verification_tokens
-          WHERE id = ?
-          LIMIT 1
-        `,
-      [id],
+  async updateRefreshTokenLastUsedAt(tokenId: string) {
+    await pool.execute(
+      `UPDATE refresh_tokens SET last_used_at = NOW() WHERE id = ?`,
+      [tokenId],
     );
+  }
 
-    return rows[0] ?? null;
-  };
+  async CreatePasswordResetToken(
+    params: CreatePasswordResetTokenParams,
+    connection: Pool | PoolConnection = pool,
+  ): Promise<void> {
+    const { user_id, token_hash, expires_at } = params;
+    await connection.execute(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)`,
+      [user_id, token_hash, expires_at],
+    );
+  }
 
-  getValidVerificationToken = async (
-    publicId: string,
+  async getPasswordResetTokenByTokenHash(
     tokenHash: string,
-  ): Promise<EmailVerificationToken | null> => {
-    const [rows] = await pool.execute<EmailVerificationToken[]>(
-      `
-          SELECT ${VERIFICATION_TOKEN_COLUMNS}
-          FROM email_verification_tokens
-          WHERE public_id = ?
-            AND token_hash = ?
-            AND used_at IS NULL
-            AND expires_at > CURRENT_TIMESTAMP
-          LIMIT 1
-        `,
-      [publicId, tokenHash],
+    connection: Pool | PoolConnection = pool,
+  ): Promise<PasswordResetToken | null> {
+    const [rows] = await connection.execute<PasswordResetToken[]>(
+      `SELECT id, user_id, token_hash, expires_at, created_at, used_at FROM password_reset_tokens WHERE token_hash = ?`,
+      [tokenHash],
     );
 
     return rows[0] ?? null;
-  };
+  }
 
-  markVerificationTokenUsed = async (id: number): Promise<boolean> => {
-    const [result] = await pool.execute<ResultSetHeader>(
+  async updatePasswordResetTokenUsedAt(
+    tokenId: string,
+    connection: Pool | PoolConnection = pool,
+  ): Promise<void> {
+    await connection.execute(
+      `UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ? AND used_at IS NULL`,
+      [tokenId],
+    );
+  }
+
+  async createVerificationToken(
+    params: CreateVerificationTokenParams,
+    connection: Pool | PoolConnection = pool,
+  ): Promise<void> {
+    const { user_id, token_hash, expires_at } = params;
+
+    await connection.execute(
       `
-        UPDATE email_verification_tokens
-        SET used_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-          AND used_at IS NULL
-      `,
-      [id],
+      INSERT INTO verification_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        token_hash = VALUES(token_hash),
+        expires_at = VALUES(expires_at),
+        used_at = NULL
+    `,
+      [user_id, token_hash, expires_at],
+    );
+  }
+
+  async getVerificationTokenByTokenHash(
+    tokenHash: string,
+    connection: Pool | PoolConnection = pool,
+  ): Promise<VerificationToken | null> {
+    const [rows] = await connection.execute<PasswordResetToken[]>(
+      `SELECT id, user_id, token_hash, expires_at, created_at, used_at FROM verification_tokens WHERE token_hash = ?`,
+      [tokenHash],
     );
 
-    return result.affectedRows === 1;
-  };
+    return rows[0] ?? null;
+  }
 
-  markEmailVerified = async (userId: number): Promise<boolean> => {
-    const [result] = await pool.execute<ResultSetHeader>(
-      `
-        UPDATE users
-        SET
-          email_verified_at = CURRENT_TIMESTAMP,
-          status = 'ACTIVE'
-        WHERE id = ?
-          AND email_verified_at IS NULL
-      `,
-      [userId],
+  async updateVerificationTokenUSedAt(
+    tokenId: string,
+    connection: PoolConnection,
+  ) {
+    await connection.execute(
+      `UPDATE verification_tokens SET used_at = NOW() WHERE id = ?`,
+      [tokenId],
     );
-
-    return result.affectedRows === 1;
-  };
+  }
 }
+
+export const authRepository = new AuthRepository();
